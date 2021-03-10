@@ -15,61 +15,53 @@ var friendPlaylistLength = 0;
 var countSorted = 0;
 
 /* *********************************************************************************** */
-function getUserID()
+async function getUserID()
 {
-  spotifyApi.getMe()
-  .then(data => {
-    user_ID = data.body.id;
-    return user_ID; 
-  })
-  .catch(e => console.log(e))
+  const tempIDPromise = await spotifyApi.getMe().catch(e => console.log(e))
+  user_ID = tempIDPromise.body.id
+  getFriends(user_ID, 0)
 };
 
-function getFriends(userparameter , offset)
-{
-  spotifyApi.getUserPlaylists(userparameter, {
+//Make sure you utilize this offset function. The point is that if the promise is 50 long, you have to
+//recall the function with offset 50 to get the next set
+
+async function getFriends(userparameter, offset){
+  const data = await spotifyApi.getUserPlaylists(userparameter, {
     limit: 50,
     offset: offset
-  })
-  .then(data => {
-    for(let playlist of data.body.items)
-    {
-      if((playlist.owner.id != user_ID) && (playlist.owner.id != 'spotify'))
-        {
-          friendArray.push(playlist.owner.id)
-        }
-      if(playlist.owner.id == user_ID)
+  }).catch(e => console.log(e));
+
+  for(let playlist of data.body.items)
+  {
+    if((playlist.owner.id != user_ID) && (playlist.owner.id != 'spotify'))
+    //if(playlist.owner.id == 'smalca02-us')
       {
-          myPlaylists.push(playlist)
+        friendArray.push(playlist.owner.id)
       }
+    if(playlist.owner.id == userparameter)
+    {
+        myPlaylists.push(playlist)
     }
-    friendArray.sort((a,b) => (a).localeCompare(b))
+  }
+
+  friendArray.sort((a,b) => (a).localeCompare(b))
     //This segment of code prunes the playlist of duplicates. This will make it all more efficient
-    for(let i = 0; i < friendArray.length - 1; i++)
-    {
-      let count = 0;
-      let j = i;
-      let tempString = friendArray[i];
-      while(friendArray[j+1] == tempString)
+    //Call the PRUNE function  here. prune(friendArray)
+    prune(friendArray);
+    friendArray.forEach(friend =>
       {
-        count++;
-        j++;
-      }
-      if(count != 0)
-      {
-      friendArray.splice(i, count);
-      }
-    }
+        console.log(friend);
+      })
 
     populatePlaylists();
-    
-  }
-  ).catch(e => console.error(e))
-};
+}
 
+//Within this function, I'm only saving the playlist ID. I might have to save the whole object because I want the size of the playlist too. that'll let me loop through
+// x/100 times so I can get every song.
 function populatePlaylists()
 {
   let promiseArray = [];
+
   for(let i = 0; i < friendArray.length; i++)
   {
     promiseArray.push(spotifyApi.getUserPlaylists(friendArray[i], {
@@ -92,25 +84,22 @@ function populatePlaylists()
               }
             })
           }
+
       friendPlaylistLength = playlistArray.length;
       console.log("There are " + friendPlaylistLength + " playlists in the friendsPlaylists array\n") 
+      console.log("Now populating my own songs...")
 
       populateMySongs();
-      populateSongs();
     }
     ).catch(e => console.log(e)); 
   }
 
 
-
-
-
-function populateMySongs()
+async function populateMySongs()
 {
   let promiseArray = [];
 
-  
-
+  //for each playlist in myPlaylists, we getTrackPromise 100 at a time.
   for(let i = 0; i < myPlaylists.length; i++)
   {
     let hundreds = 1 + (myPlaylists[i].tracks.total / 100);
@@ -122,7 +111,7 @@ function populateMySongs()
     }
   }
 
-  Promise.allSettled(promiseArray)
+  await Promise.allSettled(promiseArray)
   .then(data =>
     {
       for(let j = 0; j < promiseArray.length; j++)
@@ -142,14 +131,16 @@ function populateMySongs()
       mySongs.sort((a,b) => (a).localeCompare(b))
       prune(mySongs);
     }
+    console.log(mySongs.length + " of my own songs are unique across " + myPlaylists.length + " playlists")
+
+    console.log("Now populating my friends songs...")
+    populateSongs();
   }
   )
   .catch(e => console.log(e))
 }
 
-
-
-function populateSongs()
+async function populateSongs()
 {
   let promiseArray = [];
   let countSuccess = 0;
@@ -166,7 +157,7 @@ function populateSongs()
     }
     promiseArray.push(getTrackPromise())
   }
-  Promise.allSettled(promiseArray)
+  await Promise.allSettled(promiseArray)
   .then(data =>
      {
        for(let j = 0; j < promiseArray.length; j++)
@@ -209,15 +200,14 @@ function populateSongs()
 
             prune(megaSongs);
 
-            console.log(mySongs.length + " of my own songs are unique across " + myPlaylists.length + " playlists")
             console.log(megaSongs.length + " of my friends' songs are unique accross " + friendPlaylistLength + " playlists")
             
+            console.log("Finding shared songs...")
             findSharedSongs();
         }
   })
       .catch(e => console.log(e));
   }
-
 
   function findSharedSongs()
   {
@@ -231,8 +221,8 @@ function populateSongs()
     }
 
     console.log("There are " + sharedSongs.length + " songs you both like");
-
-    newPlaylist();
+    console.log("Creating the playlist on spotify...")
+//    newPlaylist();
   }
 
   function newPlaylist()
@@ -249,7 +239,6 @@ function populateSongs()
 
     async function makePlaylist()
     {
-      console.log("Creating playlist...")
       const newPlaylistData = await spotifyApi.createPlaylist('API Project', {
       'description': 'Dude no way', 'collaborative' : false, 'public': true
         }).catch(e => console.log(e))
@@ -284,11 +273,11 @@ function populateSongs()
 }
 
 async function getTrackPromise(userbase, offset) {
-  const result = spotifyApi.getPlaylistTracks(userbase,
+  const result = await spotifyApi.getPlaylistTracks(userbase,
     {
       limit : 100,
       offset : offset
-    });
+    }).catch(e => console.log(e));
   return result;
 }
 
@@ -392,15 +381,13 @@ app.get('/callback', (req, res) => {
 
       console.log(`Sucessfully retreived access token. Expires in ${expires_in} s.\n`);
 
+      getUserID();
 
-
-      getUserID()
-      getFriends(getUserID(), 0)
-
+      
       res.sendFile(__dirname + '/index.html')
  //     res.send('Success! You can now close the window.');
 
-      
+
 
       setInterval(async () => {
         const data = await spotifyApi.refreshAccessToken();
@@ -425,4 +412,9 @@ app.listen(8888, () =>
 
 /********************************************************************************************** */
 
+/*
 //Begin work on UI module
+var button = document.getElementById("generate")
+button.onClick = console.log("hello world!");
+//attach the generate button to newPlaylist()
+*/
