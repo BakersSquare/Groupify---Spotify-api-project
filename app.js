@@ -20,7 +20,7 @@ async function getUserID()
   const tempIDPromise = await spotifyApi.getMe().catch(e => console.log(e))
   user_ID = tempIDPromise.body.id
   getFriends(user_ID, 0)
-};
+}
 
 //Make sure you utilize this offset function. The point is that if the promise is 50 long, you have to
 //recall the function with offset 50 to get the next set
@@ -33,8 +33,8 @@ async function getFriends(userparameter, offset){
 
   for(let playlist of data.body.items)
   {
-    if((playlist.owner.id != user_ID) && (playlist.owner.id != 'spotify'))
-    //if(playlist.owner.id == 'smalca02-us')
+    //if((playlist.owner.id != user_ID) && (playlist.owner.id != 'spotify'))
+    if(playlist.owner.id == 'smalca02-us')
       {
         friendArray.push(playlist.owner.id)
       }
@@ -45,13 +45,8 @@ async function getFriends(userparameter, offset){
   }
 
   friendArray.sort((a,b) => (a).localeCompare(b))
-    //This segment of code prunes the playlist of duplicates. This will make it all more efficient
-    //Call the PRUNE function  here. prune(friendArray)
+
     prune(friendArray);
-    friendArray.forEach(friend =>
-      {
-        console.log(friend);
-      })
 
     populatePlaylists();
 }
@@ -92,8 +87,7 @@ function populatePlaylists()
       populateMySongs();
     }
     ).catch(e => console.log(e)); 
-  }
-
+}
 
 async function populateMySongs()
 {
@@ -145,18 +139,22 @@ async function populateSongs()
   let promiseArray = [];
   let countSuccess = 0;
   let tempLength = playlistArray.length
+  let promisesMade = 0;
 
+  //loop through all the playlists in the friendArray
   for(let i = 0; i < playlistArray.length; i++)
   {
-    async function getTrackPromise() {
-      const result = spotifyApi.getPlaylistTracks(playlistArray[i].id,
-        {
-          limit : 100
-        });
-      return result;
+    let timesToRepeat = Math.floor(playlistArray[i].tracks.total / 100) + 1;
+    let tempPlaylistID = playlistArray[i].id;
+
+    //This loop will loop through each playlist an appropriate number of times to retrieve the tracks
+    for(let i = 0; i < timesToRepeat; i++)
+    {
+      promisesMade++;
+      promiseArray.push(getTrackPromise(tempPlaylistID, i*100))
     }
-    promiseArray.push(getTrackPromise())
   }
+
   await Promise.allSettled(promiseArray)
   .then(data =>
      {
@@ -207,9 +205,10 @@ async function populateSongs()
         }
   })
       .catch(e => console.log(e));
-  }
+}
 
-  function findSharedSongs()
+//newPlaylist() is called at the end of this section.
+function findSharedSongs()
   {
     for(let i = 0; i < mySongs.length; i++)
     {
@@ -222,10 +221,10 @@ async function populateSongs()
 
     console.log("There are " + sharedSongs.length + " songs you both like");
     console.log("Creating the playlist on spotify...")
-//    newPlaylist();
-  }
+    newPlaylist();
+}
 
-  function newPlaylist()
+function newPlaylist()
   {
     let tempPlaylistID = '';
 
@@ -272,8 +271,9 @@ async function populateSongs()
     }
 }
 
-async function getTrackPromise(userbase, offset) {
-  const result = await spotifyApi.getPlaylistTracks(userbase,
+//
+async function getTrackPromise(playlistID, offset) {
+  const result = await spotifyApi.getPlaylistTracks(playlistID,
     {
       limit : 100,
       offset : offset
@@ -306,7 +306,7 @@ function binarySearch(arr, search)
   return -1;
 }
 
-  function prune(arr)
+function prune(arr)
   {
     for(let i = 0; i < arr.length -1; i++)
     {
@@ -316,7 +316,7 @@ function binarySearch(arr, search)
       arr.splice(i,1);
     }
     }
-  }
+}
 
 
 /***************************************************************************************************************** */
